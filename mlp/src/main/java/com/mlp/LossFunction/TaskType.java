@@ -1,4 +1,4 @@
-package com.mlp;
+package com.mlp.LossFunction;
 
 public enum TaskType {
     REGRESSION,

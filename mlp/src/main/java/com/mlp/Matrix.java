@@ -132,6 +132,15 @@ public class Matrix {
         return columnSums;
     }
 
+    public static double[][] deepCopy(double[][] original) {
+        if (original == null) return null;
+        double[][] result = new double[original.length][];
+        for (int i = 0; i < original.length; i++) {
+            result[i] = Arrays.copyOf(original[i], original[i].length);
+        }
+        return result;
+     }
+
     public Matrix() {
 
     }

@@ -24,22 +24,70 @@ public class Layer {
 
     private static final Random rand = new Random(System.currentTimeMillis());
 
-    public Layer(int numInputs, int numOutputs, ActivationFunc activation) {
+    public Layer(int numInputs, int numOutputs, ActivationFunc activation, WeighInit initMethod) {
         this.numInputs = numInputs;
         this.numOutputs = numOutputs;
         this.activationFunction = activation;
 
         this.weights = new double[numOutputs][numInputs];
         this.biases = new double[numOutputs];
+
+        // --- Use WeightInit parameter ---
+        initializeWeightsAndBiases(initMethod);
+
+        // Initialize gradient storage
         this.weightGradients = new double[numOutputs][numInputs];
         this.biasGradients = new double[numOutputs];
+    }
 
-        double limit = Math.sqrt(6.0 / (numInputs + numOutputs));
-        for (int i = 0; i < numOutputs; i++) {
-            for (int j = 0; j < numInputs; j++) {
-                weights[i][j] = (rand.nextDouble() * 2.0 - 1.0) * limit;
-            }
-            biases[i] = 0.0;
+    private void initializeWeightsAndBiases(WeighInit initMethod) {
+        switch (initMethod) {
+            case GLOROT_UNIFORM:
+                double limitGlorot = Math.sqrt(6.0 / (numInputs + numOutputs));
+                for (int i = 0; i < numOutputs; i++) {
+                    for (int j = 0; j < numInputs; j++) {
+                        weights[i][j] = (rand.nextDouble() * 2.0 - 1.0) * limitGlorot;
+                    }
+                    biases[i] = 0.0;
+                }
+                break;
+
+            case HE_UNIFORM:
+                double limitHe = Math.sqrt(6.0 / numInputs);
+                for (int i = 0; i < numOutputs; i++) {
+                    for (int j = 0; j < numInputs; j++) {
+                        weights[i][j] = (rand.nextDouble() * 2.0 - 1.0) * limitHe;
+                    }
+                    biases[i] = 0.0;
+                }
+                break;
+
+            case RANDOM_NORMAL:
+                double stdDev = 0.01;
+                for (int i = 0; i < numOutputs; i++) {
+                    for (int j = 0; j < numInputs; j++) {
+                        weights[i][j] = rand.nextGaussian() * stdDev;
+                    }
+                    biases[i] = 0.0;
+                }
+                break;
+
+            case RANDOM_UNIFORM:
+                double range = 0.01;
+                for (int i = 0; i < numOutputs; i++) {
+                    for (int j = 0; j < numInputs; j++) {
+                        weights[i][j] = (rand.nextDouble() * 2.0 - 1.0) * range;
+                    }
+                    biases[i] = 0.0;
+                }
+                break;
+
+            case ZEROS:
+            default:
+                for (int i = 0; i < numOutputs; i++) {
+                    biases[i] = 0.0;
+                }
+                break;
         }
     }
 
@@ -76,6 +124,8 @@ public class Layer {
 
         if (this.delta != null && this.delta.length > 0) {
             this.biasGradients = Arrays.copyOf(this.delta[0], this.delta[0].length);
+        } else {
+            this.biasGradients = new double[numOutputs];
         }
 
         double[][] deltaForPreviousLayer = Matrix.multiply(this.delta, this.weights);
@@ -98,5 +148,13 @@ public class Layer {
 
     public double[][] getWeights() {
         return this.weights;
+    }
+
+    public void setWeights(double[][] weights) {
+        this.weights = weights;
+    }
+
+    public void setBiases(double[] biases) {
+        this.biases = biases;
     }
 }
