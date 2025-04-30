@@ -104,28 +104,122 @@ public class MLP {
         this.optimizer.update(this.layers);
     }
 
-    public void train(double[][] inputs, double[][] targets, int epochs) {
-        System.out.println("Starting training...");
-        for (int e = 0; e < epochs; e++) {
-            double epochLoss = 0;
-            for (int i = 0; i < inputs.length; i++) {
-                double[][] singleInput = Matrix.rowVectorToMatrix(inputs[i]);
-                double[][] singleTarget = Matrix.rowVectorToMatrix(targets[i]);
+    public void train(double[][] trainingInputs, double[][] trainingTargets,
+            double[][] validationInputs, double[][] validationTargets,
+            int howManyEpochsMax,
+            int patience,
+            double stopIfLossBelow) {
+        if (trainingInputs == null || trainingTargets == null || trainingInputs.length != trainingTargets.length) {
+            System.out.println("ERROR: Training data or targets are bad!");
+            return;
+        }
+        boolean checkValidation = (validationInputs != null && validationTargets != null);
+        if (checkValidation && validationInputs.length != validationTargets.length) {
+            System.out.println("ERROR: Validation data or targets are bad!");
+            return;
+        }
+        if (howManyEpochsMax <= 0) {
+            System.out.println("ERROR: Need to train for at least 1 epoch!");
+            return;
+        }
+        if (patience > 0 && !checkValidation) {
+            System.out.println("WARN: Patience needs validation data! Turning off early stopping.");
+            patience = 0;
+        }
 
-                double[][] prediction = this.forward(singleInput);
+        double bestScoreOnValidation = 999999999.0;
+        int howManyEpochsNoImprovement = 0;
+        String reasonWeStopped = "Finished all epochs (" + howManyEpochsMax + ")";
+        boolean toldToStopEarly = false;
 
-                epochLoss += this.calculateLoss(prediction, singleTarget);
+        System.out.println("=== Starting Training ===");
+        System.out.println("Max Epochs: " + howManyEpochsMax);
+        if (patience > 0) {
+            System.out.println("Patience: " + patience);
+        }
+        if (stopIfLossBelow > 0) {
+            System.out.println("Stop Loss Threshold: " + stopIfLossBelow);
+        }
+        System.out.println("-------------------------");
 
-                this.backward(singleTarget);
+        for (int currentEpoch = 0; currentEpoch < howManyEpochsMax; currentEpoch++) {
+            System.out.printf("Epoch %d/%d Start\n", currentEpoch + 1, howManyEpochsMax);
+
+            double totalTrainLossThisEpoch = 0.0;
+
+            for (int i = 0; i < trainingInputs.length; i++) {
+                double[] currentInput = trainingInputs[i];
+                double[] currentTarget = trainingTargets[i];
+
+                double[][] inputMatrix = Matrix.rowVectorToMatrix(currentInput);
+                double[][] targetMatrix = Matrix.rowVectorToMatrix(currentTarget);
+
+                double[][] predictionOutput = this.forward(inputMatrix);
+
+                double lossForThisExample = this.calculateLoss(predictionOutput, targetMatrix);
+                totalTrainLossThisEpoch += lossForThisExample;
+
+                this.backward(targetMatrix);
 
                 this.updateWeights();
             }
-            if ((e + 1) % 100 == 0 || e == 0) {
-                System.out.printf("Epoch %d/%d, Average Loss: %.6f%n",
-                        e + 1, epochs, epochLoss / inputs.length);
+            double averageTrainLoss = totalTrainLossThisEpoch / trainingInputs.length;
+            System.out.printf("  Avg Train Loss: %.6f\n", averageTrainLoss);
+
+            double averageValidationLoss = -1.0;
+            if (checkValidation) {
+                double totalValLossThisEpoch = 0.0;
+                for (int i = 0; i < validationInputs.length; i++) {
+                    double[][] valInputMatrix = Matrix.rowVectorToMatrix(validationInputs[i]);
+                    double[][] valTargetMatrix = Matrix.rowVectorToMatrix(validationTargets[i]);
+
+                    double[][] valPredictionOutput = this.forward(valInputMatrix);
+
+                    totalValLossThisEpoch += this.calculateLoss(valPredictionOutput, valTargetMatrix);
+                }
+                averageValidationLoss = totalValLossThisEpoch / validationInputs.length;
+                System.out.printf("  Avg Val Loss  : %.6f\n", averageValidationLoss);
             }
+
+
+            double lossToUseForStopping = checkValidation ? averageValidationLoss : averageTrainLoss;
+            if (stopIfLossBelow > 0 && lossToUseForStopping <= stopIfLossBelow) {
+                reasonWeStopped = "Loss went below threshold (" + stopIfLossBelow + ") at epoch " + (currentEpoch + 1);
+                toldToStopEarly = true;
+                System.out.println("STOPPING: " + reasonWeStopped);
+                break;
+            }
+
+            if (checkValidation && patience > 0) {
+                if (averageValidationLoss < bestScoreOnValidation) {
+                    System.out.println("  Validation loss improved!");
+                    bestScoreOnValidation = averageValidationLoss;
+                    howManyEpochsNoImprovement = 0;
+                } else {
+                    howManyEpochsNoImprovement++;
+                    System.out.println(
+                            "  Validation loss did not improve (" + howManyEpochsNoImprovement + "/" + patience + ")");
+                    if (howManyEpochsNoImprovement >= patience) {
+                        reasonWeStopped = "Stopped early because validation loss didn't improve for " + patience
+                                + " epochs.";
+                        toldToStopEarly = true;
+                        System.out.println("STOPPING: " + reasonWeStopped);
+                        break;
+                    }
+                }
+            }
+            System.out.println("---");
+
         }
-        System.out.println("Training finished.");
+
+        System.out.println("=========================");
+        System.out.println("Training Finished!");
+        System.out.println("Reason: " + reasonWeStopped);
+        if (checkValidation && patience > 0) {
+            System.out.printf("Best Validation Loss was: %.6f\n", bestScoreOnValidation);
+        }
+        System.out.println("=========================");
+
     }
 
 }
