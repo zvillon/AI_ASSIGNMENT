@@ -7,20 +7,20 @@ import com.mlp.ActivationFunction.ActivationFunc;
 
 public class Layer {
 
-    int numInputs;
-    int numOutputs;
-    double[][] weights;
-    double[] biases;
+    private int numInputs;
+    private int numOutputs;
+    private double[][] weights;
+    private double[] biases;
 
-    ActivationFunc activationFunction;
+    private ActivationFunc activationFunction;
 
-    double[][] lastInput;
-    double[][] lastZ;
-    double[][] lastActivation;
+    private double[][] lastInput;
+    private double[][] weigthWithBias;
+    private double[][] activatedData;
 
-    double[][] weightGradients;
-    double[] biasGradients;
-    double[][] delta;
+    private double[][] weightGradients;
+    private double[] biasGradients;
+    private double[][] delta;
 
     private static final Random rand = new Random(System.currentTimeMillis());
 
@@ -51,12 +51,12 @@ public class Layer {
 
         double[][] weightsTransposed = Matrix.transpose(this.weights);
 
-        double[][] z_intermediate = Matrix.multiply(this.lastInput, weightsTransposed);
+        double[][] weightedSum = Matrix.multiply(this.lastInput, weightsTransposed);
 
-        this.lastZ = Matrix.addBiasVectorToRows(z_intermediate, this.biases);
-        this.lastActivation = Matrix.applyFunc(this.lastZ, activationFunction::activate);
+        this.weigthWithBias = Matrix.addBiasVectorToRows(weightedSum, this.biases);
+        this.activatedData = Matrix.applyFunc(this.weigthWithBias, this.activationFunction::activate);
 
-        return this.lastActivation;
+        return this.activatedData;
     }
 
     public double[][] backward(double[][] deltaFromNextLayer, double[][] weightsFromNextLayer) {
@@ -67,7 +67,7 @@ public class Layer {
         } else {
             errorSignalPropagated = Matrix.multiply(deltaFromNextLayer, weightsFromNextLayer);
 
-            double[][] activationDerivative = Matrix.applyFunc(this.lastActivation, activationFunction::derivative);
+            double[][] activationDerivative = Matrix.applyFunc(this.activatedData, activationFunction::derivative);
 
             this.delta = Matrix.multiplyElementWise(errorSignalPropagated, activationDerivative);
         }
@@ -77,7 +77,6 @@ public class Layer {
         if (this.delta != null && this.delta.length > 0) {
             this.biasGradients = Arrays.copyOf(this.delta[0], this.delta[0].length);
         }
-
 
         double[][] deltaForPreviousLayer = Matrix.multiply(this.delta, this.weights);
 
@@ -91,5 +90,13 @@ public class Layer {
         for (int i = 0; i < numOutputs; i++) {
             this.biases[i] -= learningRate * this.biasGradients[i];
         }
+    }
+
+    public double[][] getActivatedData() {
+        return this.activatedData;
+    }
+
+    public double[][] getWeights() {
+        return this.weights;
     }
 }

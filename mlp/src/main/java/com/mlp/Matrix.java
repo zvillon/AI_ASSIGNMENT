@@ -86,9 +86,14 @@ public class Matrix {
         }
         return result;
     }
-    
+
+    public static double[][] rowVectorToMatrix(double[] v) {
+        double[][] matrix = new double[1][v.length];
+        matrix[0] = Arrays.copyOf(v, v.length);
+        return matrix;
+    }
+
     public static double[][] multiply(double[][] a, double[][] b) {
-        // Just checking for errors in case matrix multiplications are possible or not, got those kind of error with numpy before
         if (a[0].length != b.length || b[0].length != a.length) {
             throw new IllegalArgumentException("Matrix dimensions are not compatible for multiplication.");
         }
@@ -115,17 +120,16 @@ public class Matrix {
         return ret;
     }
 
-    public static double[] sumColumn(double[][] a) {
-        double [] ret = new double[a.length];
-
-        for (int i = 0; i < a[0].length; ++i) {
-            double temps = 0;
-            for (int j = 0; j < a.length; ++j) {
-                temps += a[i][j];
+    public static double[] sumColumns(double[][] a) {
+        if (a == null || a.length == 0) return new double[0];
+        int numCols = a[0].length;
+        double[] columnSums = new double[numCols];
+        for (int j = 0; j < numCols; j++) {
+            for (int i = 0; i < a.length; i++) {
+                columnSums[j] += a[i][j];
             }
-            ret[i] = temps;
         }
-        return ret;
+        return columnSums;
     }
 
     public Matrix() {
