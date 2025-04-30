@@ -1,41 +1,67 @@
 package com.mlp;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.mlp.ActivationFunction.ActivationFunc;
+import com.mlp.ActivationFunction.Linear;
+import com.mlp.ActivationFunction.Sigmoid;
 import com.mlp.LossFunction.BinaryCrossEntropy;
 import com.mlp.LossFunction.LossFunction;
 import com.mlp.LossFunction.MeanSquaredError;
 import com.mlp.LossFunction.TaskType;
+import com.mlp.Optimizer.Optimizer;
 
 public class MLP {
-    private List<Layer> network;
-    private double learningRate;
+    private List<Layer> layers;
+    private Optimizer optimizer;
     private LossFunction lossFunction;
-    private ActivationFunc activationFunction;
+    private TaskType taskType;
     private WeighInit weighInitType;
+    private ActivationFunc activationFunction;
 
-    public MLP(int layerSize, double learningRate, ActivationFunc activationFunc, TaskType type, WeighInit weighInit) {
-        this.learningRate = learningRate;
+    public MLP(Optimizer optimizer,
+            TaskType taskType,
+            LossFunction lossFunction,
+            WeighInit weighType,
+            ActivationFunc activationFunc,
+            int... layerSizes) {
+        this.optimizer = optimizer;
         this.activationFunction = activationFunc;
-        this.weighInitType = weighInit;
+        this.weighInitType = weighType;
+        this.taskType = taskType;
+        this.layers = new ArrayList<>();
 
-        switch (type) {
-            case BINARY_CLASSIFICATION:
-                this.lossFunction = new BinaryCrossEntropy();
-                break;
+        ActivationFunc outputActivation;
+
+        switch (taskType) {
             case REGRESSION:
-                this.lossFunction = new MeanSquaredError();
-                break;
+                outputActivation = new Linear();
+            case BINARY_CLASSIFICATION:
+                outputActivation = new Sigmoid();
             default:
-                throw new ExceptionInInitializerError("Didn't recognize the TaskType");
+                throw new Error("Task type not supported");
+        }
+
+        for (int i = 0; i < layerSizes.length - 1; i++) {
+            int numInputs = layerSizes[i];
+            int numOutputs = layerSizes[i + 1];
+
+            ActivationFunc currentActivation;
+            if (i == layerSizes.length - 2) {
+                currentActivation = outputActivation;
+            } else {
+                currentActivation = activationFunc;
+            }
+
+            layers.add(new Layer(numInputs, numOutputs, currentActivation, weighType));
         }
 
     }
 
     public double[][] forward(double[][] networkInput) {
         double[][] currentData = networkInput;
-        for (Layer curLayer : this.network) {
+        for (Layer curLayer : this.layers) {
             currentData = curLayer.forward(currentData);
         }
         return currentData;
@@ -46,7 +72,7 @@ public class MLP {
     }
 
     public void backward(double[][] output) {
-        Layer outputLayer = this.network.get(this.network.size() - 1);
+        Layer outputLayer = this.layers.get(this.layers.size() - 1);
         double[][] prediction = outputLayer.getActivatedData();
 
         double[][] deltaOutputMatrix;
@@ -62,8 +88,8 @@ public class MLP {
         double[][] deltaForCurrentLayer = deltaOutputMatrix;
         double[][] weightsFromNextLayer = null;
 
-        for (int i = this.network.size() - 1; i >= 0; i--) {
-            Layer currentLayer = this.network.get(i);
+        for (int i = this.layers.size() - 1; i >= 0; i--) {
+            Layer currentLayer = this.layers.get(i);
 
             double[][] deltaToPropagate = currentLayer.backward(deltaForCurrentLayer, weightsFromNextLayer);
 
@@ -73,11 +99,9 @@ public class MLP {
     }
 
     public void updateWeights() {
-        if (this.network == null)
+        if (this.layers == null)
             return;
-        for (Layer layer : this.network) {
-            layer.updateWeights(this.learningRate);
-        }
+        this.optimizer.update(this.layers);
     }
 
     public void train(double[][] inputs, double[][] targets, int epochs) {

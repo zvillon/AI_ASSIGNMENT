@@ -121,7 +121,8 @@ public class Matrix {
     }
 
     public static double[] sumColumns(double[][] a) {
-        if (a == null || a.length == 0) return new double[0];
+        if (a == null || a.length == 0)
+            return new double[0];
         int numCols = a[0].length;
         double[] columnSums = new double[numCols];
         for (int j = 0; j < numCols; j++) {
@@ -133,13 +134,59 @@ public class Matrix {
     }
 
     public static double[][] deepCopy(double[][] original) {
-        if (original == null) return null;
+        if (original == null)
+            return null;
         double[][] result = new double[original.length][];
         for (int i = 0; i < original.length; i++) {
             result[i] = Arrays.copyOf(original[i], original[i].length);
         }
         return result;
-     }
+    }
+
+    public static double[][] square(double[][] a) {
+        double[][] result = new double[a.length][a[0].length];
+        for (int i = 0; i < a.length; ++i)
+            for (int j = 0; j < a[0].length; ++j)
+                result[i][j] = a[i][j] * a[i][j];
+        return result;
+    }
+
+    public static double[] square(double[] a) {
+        double[] result = new double[a.length];
+        for (int i = 0; i < a.length; ++i)
+            result[i] = a[i] * a[i];
+        return result;
+    }
+
+    public static double[][] sqrt(double[][] a) {
+        double[][] result = new double[a.length][a[0].length];
+        for (int i = 0; i < a.length; ++i)
+            for (int j = 0; j < a[0].length; ++j)
+                result[i][j] = Math.sqrt(a[i][j]);
+        return result;
+    }
+
+    public static double[] sqrt(double[] a) {
+        double[] result = new double[a.length];
+        for (int i = 0; i < a.length; ++i)
+            result[i] = Math.sqrt(a[i]);
+        return result;
+    }
+
+    public static double[][] divide(double[][] a, double[][] b) {
+        double[][] result = new double[a.length][a[0].length];
+        for (int i = 0; i < a.length; ++i)
+            for (int j = 0; j < a[0].length; ++j)
+                result[i][j] = a[i][j] / b[i][j];
+        return result;
+    }
+
+    public static double[] divide(double[] a, double[] b) {
+        double[] result = new double[a.length];
+        for (int i = 0; i < a.length; ++i)
+            result[i] = a[i] / b[i];
+        return result;
+    }
 
     public Matrix() {
 

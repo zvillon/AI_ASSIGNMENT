@@ -133,21 +133,24 @@ public class Layer {
         return deltaForPreviousLayer;
     }
 
-    public void updateWeights(double learningRate) {
-        double[][] scaledWeightGradients = Matrix.multiply(this.weightGradients, learningRate);
-        this.weights = Matrix.substract(this.weights, scaledWeightGradients);
-
-        for (int i = 0; i < numOutputs; i++) {
-            this.biases[i] -= learningRate * this.biasGradients[i];
-        }
-    }
-
     public double[][] getActivatedData() {
         return this.activatedData;
     }
 
     public double[][] getWeights() {
         return this.weights;
+    }
+
+    public double[] getBias() {
+        return this.getBias();
+    }
+
+    public double[][] getWeightsGradient() {
+        return this.weightGradients;
+    }
+
+    public double[] getBiasGradient() {
+        return this.biasGradients;
     }
 
     public void setWeights(double[][] weights) {
