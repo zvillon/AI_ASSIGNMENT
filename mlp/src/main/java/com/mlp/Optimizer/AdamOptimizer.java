@@ -13,7 +13,6 @@ public class AdamOptimizer implements Optimizer {
     private final double beta2;
     private final double epsilon;
 
-    // State
     private final Map<Layer, double[][]> mWeights;
     private final Map<Layer, double[]> mBiases;
     private final Map<Layer, double[][]> vWeights;
@@ -46,11 +45,11 @@ public class AdamOptimizer implements Optimizer {
 
     @Override
     public void update(List<Layer> layers) {
-        t++; // Increment timestep for bias correction
+        t++;
 
         for (Layer layer : layers) {
             double[][] w = layer.getWeights();
-            double[] b = layer.getBias();
+            double[] b = layer.getBiases();
             double[][] dw = layer.getWeightsGradient();
             double[] db = layer.getBiasGradient();
 

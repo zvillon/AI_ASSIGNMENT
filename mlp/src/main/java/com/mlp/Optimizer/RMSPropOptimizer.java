@@ -37,7 +37,7 @@ public class RMSPropOptimizer implements Optimizer {
     public void update(List<Layer> layers) {
         for (Layer layer : layers) {
             double[][] w = layer.getWeights();
-            double[] b = layer.getBias();
+            double[] b = layer.getBiases();
             double[][] dw = layer.getWeightsGradient();
             double[] db = layer.getBiasGradient();
 

@@ -3,13 +3,8 @@ package com.mlp;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.mlp.ActivationFunction.ActivationFunc;
-import com.mlp.ActivationFunction.Linear;
-import com.mlp.ActivationFunction.Sigmoid;
-import com.mlp.LossFunction.BinaryCrossEntropy;
-import com.mlp.LossFunction.LossFunction;
-import com.mlp.LossFunction.MeanSquaredError;
-import com.mlp.LossFunction.TaskType;
+import com.mlp.ActivationFunction.*;
+import com.mlp.LossFunction.*;
 import com.mlp.Optimizer.Optimizer;
 
 public class MLP {
@@ -17,46 +12,62 @@ public class MLP {
     private Optimizer optimizer;
     private LossFunction lossFunction;
     private TaskType taskType;
-    private WeighInit weighInitType;
-    private ActivationFunc activationFunction;
 
     public MLP(Optimizer optimizer,
             TaskType taskType,
-            LossFunction lossFunction,
             WeighInit weighType,
-            ActivationFunc activationFunc,
+            ActivationFunc hiddenActivationFunc,
             int... layerSizes) {
+
+        if (layerSizes == null || layerSizes.length < 2) {
+            throw new IllegalArgumentException("Need at least an input and output layer size.");
+        }
+
         this.optimizer = optimizer;
-        this.activationFunction = activationFunc;
-        this.weighInitType = weighType;
         this.taskType = taskType;
         this.layers = new ArrayList<>();
 
         ActivationFunc outputActivation;
-
         switch (taskType) {
             case REGRESSION:
                 outputActivation = new Linear();
+                this.lossFunction = new MeanSquaredError();
+                break;
             case BINARY_CLASSIFICATION:
                 outputActivation = new Sigmoid();
+                if (layerSizes[layerSizes.length - 1] != 1) {
+                    System.out.println("Warning: Binary classification usually has 1 output neuron with Sigmoid. Found "
+                            + layerSizes[layerSizes.length - 1]);
+                }
+                this.lossFunction = new CrossEntropyLoss();
+                break;
+            case MULTICLASS_CLASSIFICATION:
+                outputActivation = new Softmax();
+                this.lossFunction = new CrossEntropyLoss();
+                break;
             default:
-                throw new Error("Task type not supported");
+                throw new IllegalArgumentException("Task type not supported: " + taskType);
         }
+        System.out.println("Task: " + taskType + ", Output Activation: " + outputActivation.getClass().getSimpleName()
+                + ", Loss: " + lossFunction.getClass().getSimpleName());
 
         for (int i = 0; i < layerSizes.length - 1; i++) {
             int numInputs = layerSizes[i];
             int numOutputs = layerSizes[i + 1];
 
             ActivationFunc currentActivation;
+            WeighInit currentInit = weighType;
+
             if (i == layerSizes.length - 2) {
                 currentActivation = outputActivation;
             } else {
-                currentActivation = activationFunc;
+                currentActivation = hiddenActivationFunc;
             }
 
-            layers.add(new Layer(numInputs, numOutputs, currentActivation, weighType));
+            System.out.printf("Adding Layer %d: %d inputs, %d outputs, Activation: %s, Init: %s\n",
+                    i, numInputs, numOutputs, currentActivation.getClass().getSimpleName(), currentInit);
+            layers.add(new Layer(numInputs, numOutputs, currentActivation, currentInit));
         }
-
     }
 
     public double[][] forward(double[][] networkInput) {
@@ -68,24 +79,28 @@ public class MLP {
     }
 
     public double calculateLoss(double[][] predicted, double[][] target) {
+        if (this.lossFunction == null) {
+            throw new IllegalStateException("Loss function has not been set.");
+        }
         return this.lossFunction.compute(predicted, target);
     }
 
-    public void backward(double[][] output) {
+    public void backward(double[][] targetOutput) {
+        if (this.layers == null || this.layers.isEmpty())
+            return;
+
         Layer outputLayer = this.layers.get(this.layers.size() - 1);
         double[][] prediction = outputLayer.getActivatedData();
 
-        double[][] deltaOutputMatrix;
-        double[] predictionVector = prediction[0];
-        double[] targetVector = output[0];
-        double[] deltaVector = new double[predictionVector.length];
-
-        for (int i = 0; i < predictionVector.length; i++) {
-            deltaVector[i] = predictionVector[i] - targetVector[i];
+        if (prediction == null || targetOutput == null || prediction.length != targetOutput.length
+                || prediction[0].length != targetOutput[0].length) {
+            throw new IllegalArgumentException(
+                    "Prediction and target dimensions mismatch during backward pass or prediction is null.");
         }
-        deltaOutputMatrix = Matrix.rowVectorToMatrix(deltaVector);
 
-        double[][] deltaForCurrentLayer = deltaOutputMatrix;
+        double[][] deltaOutput = Matrix.substract(prediction, targetOutput);
+
+        double[][] deltaForCurrentLayer = deltaOutput;
         double[][] weightsFromNextLayer = null;
 
         for (int i = this.layers.size() - 1; i >= 0; i--) {
@@ -99,127 +114,116 @@ public class MLP {
     }
 
     public void updateWeights() {
-        if (this.layers == null)
+        if (this.optimizer == null) {
+            System.err.println("Optimizer not set. Cannot update weights.");
             return;
+        }
         this.optimizer.update(this.layers);
     }
 
     public void train(double[][] trainingInputs, double[][] trainingTargets,
             double[][] validationInputs, double[][] validationTargets,
-            int howManyEpochsMax,
+            int maxEpochs,
             int patience,
-            double stopIfLossBelow) {
-        if (trainingInputs == null || trainingTargets == null || trainingInputs.length != trainingTargets.length) {
-            System.out.println("ERROR: Training data or targets are bad!");
+            double stopLossThreshold) {
+        if (trainingInputs == null || trainingTargets == null || trainingInputs.length != trainingTargets.length
+                || trainingInputs.length == 0) {
+            System.err.println("ERROR: Invalid training data or targets.");
             return;
         }
-        boolean checkValidation = (validationInputs != null && validationTargets != null);
-        if (checkValidation && validationInputs.length != validationTargets.length) {
-            System.out.println("ERROR: Validation data or targets are bad!");
-            return;
-        }
-        if (howManyEpochsMax <= 0) {
-            System.out.println("ERROR: Need to train for at least 1 epoch!");
-            return;
-        }
-        if (patience > 0 && !checkValidation) {
-            System.out.println("WARN: Patience needs validation data! Turning off early stopping.");
+        boolean useValidation = (validationInputs != null && validationTargets != null
+                && validationInputs.length == validationTargets.length && validationInputs.length > 0);
+        if (patience > 0 && !useValidation) {
+            System.out.println("WARN: Patience requires validation data. Disabling early stopping.");
             patience = 0;
         }
-
-        double bestScoreOnValidation = 999999999.0;
-        int howManyEpochsNoImprovement = 0;
-        String reasonWeStopped = "Finished all epochs (" + howManyEpochsMax + ")";
-        boolean toldToStopEarly = false;
-
-        System.out.println("=== Starting Training ===");
-        System.out.println("Max Epochs: " + howManyEpochsMax);
-        if (patience > 0) {
-            System.out.println("Patience: " + patience);
+        if (maxEpochs <= 0) {
+            System.err.println("ERROR: maxEpochs must be positive.");
+            return;
         }
-        if (stopIfLossBelow > 0) {
-            System.out.println("Stop Loss Threshold: " + stopIfLossBelow);
-        }
+
+        System.out.printf(
+                "=== Starting Training ===\nTask: %s, Max Epochs: %d, Patience: %d, Stop Loss: %.4f, Validation: %s\n",
+                taskType, maxEpochs, patience, stopLossThreshold, useValidation);
+        System.out.println("Layers: " + layers.size() + ", Optimizer: " + optimizer.getClass().getSimpleName());
         System.out.println("-------------------------");
 
-        for (int currentEpoch = 0; currentEpoch < howManyEpochsMax; currentEpoch++) {
-            System.out.printf("Epoch %d/%d Start\n", currentEpoch + 1, howManyEpochsMax);
+        double bestValidationLoss = Double.POSITIVE_INFINITY;
+        int epochsWithoutImprovement = 0;
+        String stopReason = "Reached max epochs (" + maxEpochs + ")";
 
-            double totalTrainLossThisEpoch = 0.0;
+        for (int epoch = 0; epoch < maxEpochs; epoch++) {
+
+            double epochTrainLoss = 0.0;
 
             for (int i = 0; i < trainingInputs.length; i++) {
-                double[] currentInput = trainingInputs[i];
-                double[] currentTarget = trainingTargets[i];
 
-                double[][] inputMatrix = Matrix.rowVectorToMatrix(currentInput);
-                double[][] targetMatrix = Matrix.rowVectorToMatrix(currentTarget);
+                double[][] inputSample = Matrix.rowVectorToMatrix(trainingInputs[i]);
+                double[][] targetSample = Matrix.rowVectorToMatrix(trainingTargets[i]);
 
-                double[][] predictionOutput = this.forward(inputMatrix);
+                double[][] prediction = this.forward(inputSample);
 
-                double lossForThisExample = this.calculateLoss(predictionOutput, targetMatrix);
-                totalTrainLossThisEpoch += lossForThisExample;
+                epochTrainLoss += this.calculateLoss(prediction, targetSample);
 
-                this.backward(targetMatrix);
+                this.backward(targetSample);
 
                 this.updateWeights();
             }
-            double averageTrainLoss = totalTrainLossThisEpoch / trainingInputs.length;
-            System.out.printf("  Avg Train Loss: %.6f\n", averageTrainLoss);
+            double avgTrainLoss = epochTrainLoss / trainingInputs.length;
 
-            double averageValidationLoss = -1.0;
-            if (checkValidation) {
-                double totalValLossThisEpoch = 0.0;
+            double avgValidationLoss = -1.0;
+            if (useValidation) {
+                double epochValidationLoss = 0.0;
                 for (int i = 0; i < validationInputs.length; i++) {
-                    double[][] valInputMatrix = Matrix.rowVectorToMatrix(validationInputs[i]);
-                    double[][] valTargetMatrix = Matrix.rowVectorToMatrix(validationTargets[i]);
-
-                    double[][] valPredictionOutput = this.forward(valInputMatrix);
-
-                    totalValLossThisEpoch += this.calculateLoss(valPredictionOutput, valTargetMatrix);
+                    double[][] valInputSample = Matrix.rowVectorToMatrix(validationInputs[i]);
+                    double[][] valTargetSample = Matrix.rowVectorToMatrix(validationTargets[i]);
+                    double[][] valPrediction = this.forward(valInputSample);
+                    epochValidationLoss += this.calculateLoss(valPrediction, valTargetSample);
                 }
-                averageValidationLoss = totalValLossThisEpoch / validationInputs.length;
-                System.out.printf("  Avg Val Loss  : %.6f\n", averageValidationLoss);
+                avgValidationLoss = epochValidationLoss / validationInputs.length;
+                System.out.printf("Epoch %d/%d - Train Loss: %.6f, Val Loss: %.6f\n",
+                        epoch + 1, maxEpochs, avgTrainLoss, avgValidationLoss);
+            } else {
+                System.out.printf("Epoch %d/%d - Train Loss: %.6f\n",
+                        epoch + 1, maxEpochs, avgTrainLoss);
             }
 
+            double lossToCheck = useValidation ? avgValidationLoss : avgTrainLoss;
 
-            double lossToUseForStopping = checkValidation ? averageValidationLoss : averageTrainLoss;
-            if (stopIfLossBelow > 0 && lossToUseForStopping <= stopIfLossBelow) {
-                reasonWeStopped = "Loss went below threshold (" + stopIfLossBelow + ") at epoch " + (currentEpoch + 1);
-                toldToStopEarly = true;
-                System.out.println("STOPPING: " + reasonWeStopped);
+            if (stopLossThreshold > 0 && lossToCheck <= stopLossThreshold) {
+                stopReason = String.format("Loss (%.6f) reached threshold (%.4f) at epoch %d",
+                        lossToCheck, stopLossThreshold, epoch + 1);
+                System.out.println("STOPPING: " + stopReason);
                 break;
             }
 
-            if (checkValidation && patience > 0) {
-                if (averageValidationLoss < bestScoreOnValidation) {
-                    System.out.println("  Validation loss improved!");
-                    bestScoreOnValidation = averageValidationLoss;
-                    howManyEpochsNoImprovement = 0;
+            if (useValidation && patience > 0) {
+                if (avgValidationLoss < bestValidationLoss) {
+                    System.out.println("  Validation loss improved.");
+                    bestValidationLoss = avgValidationLoss;
+                    epochsWithoutImprovement = 0;
                 } else {
-                    howManyEpochsNoImprovement++;
-                    System.out.println(
-                            "  Validation loss did not improve (" + howManyEpochsNoImprovement + "/" + patience + ")");
-                    if (howManyEpochsNoImprovement >= patience) {
-                        reasonWeStopped = "Stopped early because validation loss didn't improve for " + patience
-                                + " epochs.";
-                        toldToStopEarly = true;
-                        System.out.println("STOPPING: " + reasonWeStopped);
+                    epochsWithoutImprovement++;
+                    System.out.printf("  Validation loss did not improve (%d/%d)\n", epochsWithoutImprovement,
+                            patience);
+                    if (epochsWithoutImprovement >= patience) {
+                        stopReason = String.format(
+                                "Validation loss did not improve for %d epochs. Stopping at epoch %d.",
+                                patience, epoch + 1);
+                        System.out.println("STOPPING: " + stopReason);
                         break;
                     }
                 }
             }
             System.out.println("---");
-
         }
 
         System.out.println("=========================");
         System.out.println("Training Finished!");
-        System.out.println("Reason: " + reasonWeStopped);
-        if (checkValidation && patience > 0) {
-            System.out.printf("Best Validation Loss was: %.6f\n", bestScoreOnValidation);
+        System.out.println("Reason: " + stopReason);
+        if (useValidation) {
+            System.out.printf("Best Validation Loss achieved: %.6f\n", bestValidationLoss);
         }
         System.out.println("=========================");
-
     }
-
 }
