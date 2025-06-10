@@ -16,7 +16,7 @@ public class ConvolutionLayer {
     private double[][][] input;
     private double[][][] output;
 
-    private class Output {
+    public class Output {
 
         private final int depth;
         private final int height;
@@ -41,7 +41,7 @@ public class ConvolutionLayer {
         }
     }
 
-    private class Input {
+    public class Input {
 
         private final int depth;
         private final int height;
@@ -136,27 +136,78 @@ public class ConvolutionLayer {
 
         for (int od = 0; od < outputDepth; od++) {
             for (int id = 0; id < inputDepth; id++) {
-                this.output[od] = correlateValid(input[id], kernels[od][id], this.output[od]);
+                this.output[od] = Correlator.correlateValid(input[id], kernels[od][id]);
             }
         }
         return this.output;
     }
 
-    private double[][] correlateValid(double[][] inputMatrix, double[][] kernel2d, double[][] outputMatrix) {
-        int kernelSize = kernel2d.length;
-        int outputHeight = outputMatrix.length;
-        int outputWidth = outputMatrix[0].length;
+    // private double[][] correlateValid(double[][] inputMatrix, double[][] kernel2d, double[][] outputMatrix) {
+    //     int kernelSize = kernel2d.length;
+    //     int outputHeight = outputMatrix.length;
+    //     int outputWidth = outputMatrix[0].length;
 
-        for (int i = 0; i < outputHeight; i++) {
-            for (int j = 0; j < outputWidth; j++) {
-                for (int k = 0; k < kernelSize; k++) {
-                    for (int l = 0; l < kernelSize; l++) {
-                        outputMatrix[i][j] += inputMatrix[i + k][j + l] * kernel2d[k][l];
+    //     for (int i = 0; i < outputHeight; i++) {
+    //         for (int j = 0; j < outputWidth; j++) {
+    //             for (int k = 0; k < kernelSize; k++) {
+    //                 for (int l = 0; l < kernelSize; l++) {
+    //                     outputMatrix[i][j] += inputMatrix[i + k][j + l] * kernel2d[k][l];
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     return outputMatrix;
+    // }
+
+    private double[][][] backward(double[][][] outputGradient, double learningRate) {
+        double[][][][] kernelsGradient = new double[this.outputDepth][this.kernelShape.inputDepth][this.kernelShape.depth][this.kernelShape.depth];
+        for (int i = 0; i < this.outputDepth; ++i) {
+            for (int j = 0; j < this.kernelShape.inputDepth; ++j) {
+                for (int k = 0; k < this.kernelShape.depth; ++k) {
+                    for (int l = 0; l < this.kernelShape.depth; ++l) {
+                        kernelsGradient[i][j][k][l] = 0.0;
                     }
                 }
             }
         }
-        return outputMatrix;
+        int inputDepth = this.inputShape.getDepth();
+        int inputHeight = this.inputShape.getHeight();
+        int inputWidth = this.inputShape.getWidth();
+        double[][][] inputGradient = new double[inputDepth][inputHeight][inputWidth];
+        for (int i = 0; i < inputDepth; ++i) {
+            for (int j = 0; j < inputHeight; ++j) {
+                for (int k = 0; k < inputWidth; ++k) {
+                    inputGradient[i][j][k] = 0.0;
+                }
+            }
+        }
+
+        for (int i = 0; i < this.outputDepth; ++i) {
+            for (int j = 0; j < inputDepth; ++j) {
+                kernelsGradient[i][j] = Correlator.correlateValid(input[j], outputGradient[i]);
+            }
+        }
+
+        for (int i = 0; i < this.outputDepth; ++i) {
+            for (int j = 0; j < this.kernelShape.inputDepth; ++j) {
+                for (int k = 0; k < this.kernelShape.depth; ++k) {
+                    for (int l = 0; l < this.kernelShape.depth; ++l) {
+                        this.kernels[i][j][k][l] -= learningRate * kernelsGradient[i][j][k][l];
+                        inputGradient[j] = Correlator.correlateFull(outputGradient[i], this.kernels[i][j]);
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < this.outputDepth; ++i) {
+            for (int j = 0; j < this.outputShape.getHeight(); ++j) {
+                for (int k = 0; k < this.outputShape.getWidth(); ++k) {
+                    this.biases[i][j][k] -= learningRate * outputGradient[i][j][k];
+
+                }
+            }
+        }
+        return inputGradient;
     }
  
 }
