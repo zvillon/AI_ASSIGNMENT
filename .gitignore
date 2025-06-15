@@ -25,3 +25,5 @@ replay_pid*
 *.csv
 
 .venv
+
+__pycache__

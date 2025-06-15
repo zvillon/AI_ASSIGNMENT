@@ -36,25 +36,24 @@ class MNISTUtils {
             System.out.printf("MNIST: %d images, %dx%d pixels%n", numImages, numRows, numCols);
 
             int actualLimit = Math.min(limit, numImages);
-            // Images are [limit][height][width]
+
             double[][][] images = new double[actualLimit][numRows][numCols];
-            // Labels are one-hot encoded: [limit][10]
+
             double[][] labels = new double[actualLimit][10];
 
             int imageOffset = 16;
             int labelOffset = 8;
 
             for (int i = 0; i < actualLimit; i++) {
-                // Read image data
+
                 for (int row = 0; row < numRows; row++) {
                     for (int col = 0; col < numCols; col++) {
                         int pixelIndex = imageOffset + i * (numRows * numCols) + row * numCols + col;
-                        // Pixels are unsigned bytes (0-255), normalize to 0.0-1.0
+
                         images[i][row][col] = (imageData[pixelIndex] & 0xFF) / 255.0;
                     }
                 }
 
-                // Read label data and one-hot encode it
                 int label = labelData[labelOffset + i] & 0xFF;
                 for (int j = 0; j < 10; j++) {
                     labels[i][j] = (j == label) ? 1.0 : 0.0;
@@ -109,7 +108,7 @@ class MNISTUtils {
             return loadMNISTSimulated(limit);
         }
     }
-    
+
     public static MNISTData loadMNISTSimulated(int limit) {
         System.out.println("⚠️ Using simulated MNIST data for demonstration.");
         Random random = new Random(42);
@@ -118,7 +117,7 @@ class MNISTUtils {
         double[][] labels = new double[limit][10];
 
         for (int i = 0; i < limit; i++) {
-            // Create some basic patterns with noise
+
             for (int j = 0; j < 28; j++) {
                 for (int k = 0; k < 28; k++) {
                     double noise = random.nextGaussian() * 0.1;
@@ -134,7 +133,7 @@ class MNISTUtils {
         }
         return new MNISTData(images, labels);
     }
-    
+
     public static MNISTData loadMNIST(int limit) {
         if (Files.exists(Paths.get("train-images-idx3-ubyte")) &&
                 Files.exists(Paths.get("train-labels-idx1-ubyte"))) {

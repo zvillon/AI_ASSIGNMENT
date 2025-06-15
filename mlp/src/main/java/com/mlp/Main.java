@@ -8,7 +8,6 @@ import java.io.IOException;
 
 public class Main {
 
-    // --- Configuration ---
     private static final String MNIST_TRAIN_CSV_PATH = "mnist_train.csv";
     private static final String MNIST_TEST_CSV_PATH = "mnist_test.csv";
     private static final boolean HAS_HEADER = true;
@@ -107,8 +106,6 @@ public class Main {
         System.out.println("\n=== MNIST MLP Test (CSV Version) Completed ===");
     }
 
-    // --- Helper Methods ---
-
     private static MLP setupMLPModel() {
         int[] layerSizes = { INPUT_FEATURES, 128, 64, NUM_CLASSES };
         Optimizer optimizer = new SGDOptimizer(LEARNING_RATE);
@@ -190,7 +187,7 @@ public class Main {
     public static int predictSingleImage(MLP mlp, double[] imageSample) {
         if (imageSample == null || imageSample.length != INPUT_FEATURES) {
             System.err.println("Error: Invalid image sample provided for prediction.");
-            return -1; // Indicate error
+            return -1;
         }
 
         double[][] inputMatrix = Matrix.rowVectorToMatrix(imageSample);
